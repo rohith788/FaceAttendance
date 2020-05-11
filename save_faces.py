@@ -4,7 +4,7 @@ import numpy as np
 
 
 faceCascade = cv2.CascadeClassifier()
-faceCascade.load('haarcascade_frontalface_default.xml')
+faceCascade.load('data/haarcascade_frontalface_default.xml')
 cam = cv2.VideoCapture(0)
 cam.set(3,640) # set Width
 cam.set(4,480) # set Height]
