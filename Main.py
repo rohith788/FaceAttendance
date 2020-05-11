@@ -19,6 +19,7 @@ class RecordVideo(QtCore.QObject):
         self.camera.set(4, 480)  # set Height]
         self.timer = QtCore.QBasicTimer()
 
+
     def start_recording(self):
         self.timer.start(0, self)
 
@@ -27,6 +28,7 @@ class RecordVideo(QtCore.QObject):
             return
 
         read, data = self.camera.read()
+
         if read:
             self.image_data.emit(data)
 
@@ -40,6 +42,8 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         self._red = (0, 0, 255)
         self._width = 2
         self._min_size = (30, 30)
+        self.count = 0
+        self.face_id = "default"
 
     def detect_faces(self, image: np.ndarray):
         # haarclassifiers work better in black and white
@@ -56,8 +60,16 @@ class FaceDetectionWidget(QtWidgets.QWidget):
 
     def image_data_slot(self, image_data):
         faces = self.detect_faces(image_data)
-        for (x, y, w, h) in faces:
-            self.face_name.emit("name")
+        self.face_name.emit("no-name")
+        gray = cv2.cvtColor(image_data, cv2.COLOR_BGR2GRAY)
+        if(self.count < 50):
+            for (x, y, w, h) in faces:
+                self.face_name.emit("name")
+                cv2.rectangle(image_data, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                self.count += 1
+                # Save the captured image into the datasets folder
+                cv2.imwrite("dataset/User." + str(self.face_id) + '.' +
+                            str(self.count) + ".jpg", gray[y:y + h, x:x + w])
             # cv2.rectangle(image_data,
             #               (x, y),
             #               (x+w, y+h),
@@ -99,21 +111,32 @@ class MainWidget(QtWidgets.QWidget):
         # TODO: set video port
         self.record_video = RecordVideo()
 
+        self.id = QtWidgets.QLineEdit()
+
+
+
         image_data_slot = self.face_detection_widget.image_data_slot
         self.record_video.image_data.connect(image_data_slot)
-        self.record_video.start_recording()
+        # self.record_video.start_recording()
         lable = QtWidgets.QLabel()
         lable.setText("Place Holder")
+
+
+
         layout = QtWidgets.QVBoxLayout()
 
         layout.addWidget(self.face_detection_widget)
         self.run_button = QtWidgets.QPushButton('Start')
         layout.addWidget(self.run_button)
         layout.addWidget(lable)
-        self.record_video.start_recording()
+        layout.addWidget(self.id)
+        # self.record_video.start_recording()
         self.face_detection_widget.face_name.connect(lable.setText)
-        # self.run_button.clicked.connect(self.record_video.start_recording)
+        self.run_button.clicked.connect(self.send_data)
         self.setLayout(layout)
+    def send_data(self):
+        self.record_video.start_recording()
+        self.face_detection_widget.face_id = self.id.text()
 
 
 def main(haar_cascade_filepath):
