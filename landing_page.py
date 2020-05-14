@@ -4,7 +4,6 @@ import os
 from PIL import Image
 import json
 import datetime
-import pyttsx3
 import speech_recognition as sr
 from threading import Timer
 
@@ -410,6 +409,7 @@ class MainWindow(QtWidgets.QWidget):
         if("yes" in text):
             # self.database[self.employee_name] = {str(date): {'in': str(time), 'out': 'Null', 'break': {"in": "", "out": ""}}}
             self.database[self.employee_name][date]['in'] = time
+            self.in_out_confirm(text)
             # cv2.imwrite(date+'_'+time+'_'+self.employee_name, self.face_recognition_widget.image)
         elif("no" in text):
             self.check_lable.setText("Do you want to FORCE Clock Out?")
@@ -427,10 +427,12 @@ class MainWindow(QtWidgets.QWidget):
         self.thread.sig1.disconnect()
         if "yes" in text:
             self.database[self.employee_name][date]['out'] = time
+            self.in_out_confirm(text)
             self.thread.sig1.connect(self.check_name)
         elif "no" in text:
             self.check_lable.setText("Do you want to go out on a break")
             self.thread.sig1.connect(self.clock_break)
+
         with open("database.json", "w") as outfile:  # save the name and id in json file
             json.dump(self.database, outfile)
         self.thread.restart()
@@ -443,6 +445,7 @@ class MainWindow(QtWidgets.QWidget):
         if text == "yes":
             self.database[self.employee_name][date]['in'] = "EXCEPTION"
             self.database[self.employee_name][date]['out'] = time
+            self.in_out_confirm(text)
             self.thread.sig1.connect(self.check_name)
         if text == "no":
             self.thread.sig1.connect(self.check_name)
@@ -457,8 +460,10 @@ class MainWindow(QtWidgets.QWidget):
         self.thread.stop()
         if text == "yes":
             self.database[self.employee_name][date]['break'] = {'in' : ''  , 'out' : time}
+
             with open("database.json", "w") as outfile:  # save the name and id in json file
                 json.dump(self.database, outfile)
+            self.in_out_confirm(text)
         self.thread.sig1.connect(self.check_name)
         self.thread.restart()
 
@@ -483,7 +488,7 @@ class MainWindow(QtWidgets.QWidget):
         msgBox.setWindowTitle("Confiration box")
         msgBox.setStandardButtons(QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
         returnValue = msgBox.exec()
-        if returnValue == QtWidgets.QMessageBox.Ok ################################## ::::::::::
+        if returnValue == QtWidgets.QMessageBox.Ok:
             self.show()
 
     def check_registered(self, reg):
