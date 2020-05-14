@@ -18,20 +18,28 @@ from PyQt5 import QtGui
 
 
 
-class Speech(QtCore.QObject):
+class Speech(QtCore.QThread):
     sig1 = QtCore.pyqtSignal(str)
+    sig2 = QtCore.pyqtSignal(str)
 
+    runing = True
     @QtCore.pyqtSlot()
-    def task(self):
+    def run(self):
         print("worker")
         recogniser = sr.Recognizer()
-        count = 0
-        while True:
-            print(count)
+        while self.runing:
             with sr.Microphone() as source:
-                print("speak")
-                audio = recogniser.adjust_for_ambient_noise(source, duration=2)
-                print("done")
+
+                recogniser.adjust_for_ambient_noise(source)
+
+                try:
+                    self.sig2.emit("Pleas Speak")
+                    audio = recogniser.listen(source, timeout=3)
+
+                    print("done")
+                except:
+                    self.sig2.emit("Pleas Wait")
+                    print("timeout")
                 try:
                     text = recogniser.recognize_google(audio)
                     print(text)
@@ -40,16 +48,21 @@ class Speech(QtCore.QObject):
                             self.sig1.emit(text)
                         elif "no" in text or "No" in text:
                             self.sig1.emit(text)
-                        elif "in" in text or "in" in text:
-                            self.sig1.emit(text)
-                        elif "out" in text or "out" in text:
-                            self.sig1.emit(text)
-                        elif "break" in text or "break" in text:
-                            self.sig1.emit(text)
+                        # elif "in" in text or "in" in text:
+                        #     self.sig1.emit(text)
+                        # elif "out" in text or "out" in text:
+                        #     self.sig1.emit(text)
+                        # elif "break" in text or "break" in text:
+                        #     self.sig1.emit(text)
                 except:
                     print("error")
-                count += 1
 
+    def stop(self):
+        self.runing = False
+
+    def restart(self):
+        self.runing = True
+        # self.wait()
 
 class RecordVideo(QtCore.QObject):
     image_data = QtCore.pyqtSignal(np.ndarray)
@@ -192,10 +205,16 @@ class FaceDetectionWidget(QtWidgets.QWidget):
 
 class recognize_face(FaceDetectionWidget): #inheriting form the main class
     name = QtCore.pyqtSignal(str)
+    signal = QtCore.pyqtSignal(str)
+
     def __init__(self, fp ):
         super().__init__(FaceDetectionWidget)
         self.recognizer = cv2.face.LBPHFaceRecognizer_create()
-        self.recognizer.read('trainer/trainer.yml')
+        print(str(len(self.name_to_id)) + '-------------------------------')
+        if(len(self.name_to_id) > 0):
+            self.recognizer.read('trainer/trainer.yml')
+        else:
+            self.signal.emit('k')
         # self.speech_thread = Speech()
         self.check_face = True
         self.show = True
@@ -219,7 +238,7 @@ class recognize_face(FaceDetectionWidget): #inheriting form the main class
             id, confidence = self.recognizer.predict(gray[y:y + h, x:x + w])
 
             # If confidence is less them 100 ==> "0" : perfect match
-            if (confidence < 100 and confidence > 40):
+            if (confidence < 100 and confidence > 30):
                 # print(id)
                 id = self.name_to_id[str(id)]
                 if self.show:
@@ -229,8 +248,8 @@ class recognize_face(FaceDetectionWidget): #inheriting form the main class
             else:
                 id = "unknown"
                 confidence = "  {0}%".format(round(100 - confidence))
-                if self.show:
-                    self.name.emit(id)
+                # if self.show:
+                self.name.emit(id)
 
         self.image = self.get_qimage(image)
         #
@@ -245,10 +264,7 @@ class MainWindow(QtWidgets.QWidget):
 
         fp = haarcascade_filepath
 
-        self.worker = Speech()
-        self.thread = QtCore.QThread()
-        self.thread.start()
-        self.worker.moveToThread(self.thread)
+        self.thread = Speech()
 
         self.face_recognition_widget = recognize_face(haarcascade_filepath) #init face recognition class
 
@@ -256,7 +272,6 @@ class MainWindow(QtWidgets.QWidget):
 
         if path.exists("face_id.json"):  # file that saves the face name to the id number
             f = open("face_id.json", )
-
             # returns JSON object as
             check = json.load(f)
 
@@ -313,15 +328,15 @@ class MainWindow(QtWidgets.QWidget):
 
         self.face_recognition_widget.name.connect(self.interact_with_text)
 
-        # self.face_recognition_widget.speech_thread.sig1.connect(self.disp_speech.setText)
-
         self.to_reg_win.clicked.connect(self.admin_check) #opens admin passow dialog for passowrd
 
         self.register_btn.clicked.connect(self.send_data)
 
-        self.test_btn.clicked.connect(self.save_entry)
-
         self.face_recognition_widget.face_name.connect(self.check_registered)  # loading text
+
+        self.thread.sig1.connect(self.check_name)
+
+        self.thread.sig2.connect(self.disp_speech.setText)
 
         if (len(check) > 0):
             self.record_video.start_recording()  # start timer(for looping)
@@ -329,25 +344,16 @@ class MainWindow(QtWidgets.QWidget):
             self.admin_check()
 
         # self.face_recognition_widget.speech_thread.start()
-
-        layout.setAlignment( QtCore.Qt.AlignCenter)
+        layout.setAlignment(QtCore.Qt.AlignCenter)
         self.setLayout(layout)
 
     def interact_with_text(self, text):
-        # engine = pyttsx3.init()
-        # engine.setProperty('rate', 100)
-        # engine.say(text)
-        # engine.runAndWait()
         if self.record_video.timer.isActive() and "Are you" in text:
-            # self.speech_thread = Speech()
-            # self.speech_thread.start()
-            self.face_recognition_widget.show = False
-            self.record_video.timer.stop()
-            print(" hervdfsdfge")
-            self.worker.task()
+            self.check_lable.setText(text)
+            # self.face_recognition_widget.show = False
+            self.thread.start()
         elif self.record_video.timer.isActive() and "unknown" in text:
             self.admin_check()
-        self.disp_speech.setText(text)
 
     def send_data(self):
         self.face_recognition_widget.face_id = self.name_of_user.text()  # read the face id
@@ -355,36 +361,130 @@ class MainWindow(QtWidgets.QWidget):
         self.record_video.start_recording() #start timer(for looping)
         self.face_recognition_widget.count = 0 #count in the face detection class
 
-    def save_entry(self):
+    def check_name(self, text):
         self.face_recognition_widget.name.disconnect()
+        self.thread.sig1.disconnect()
+        self.thread.stop()
         self.employee_name = self.check_lable.text().replace('Are you ', '')
         self.employee_name = self.employee_name.replace('?', '')
-        date_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         date = datetime.datetime.now().strftime("%Y/%m/%d")
         time = datetime.datetime.now().strftime("%H:%M:%S")
-        if(len(self.database) == 0):
-            self.check_lable.setText("You are not clocked in. Do you want to Clock in?")
-
-            self.database[self.employee_name] = {str(date) : {'in':str(time), 'out' : 'Null', 'break' : 'Null'} }
-        else:
-            print(self.database.keys())
-            if(self.employee_name in self.database.keys()):
-                print(self.database[self.employee_name].keys())
-                if(date in self.database[self.employee_name].keys()):
-                    self.check_lable.setText("Looks like you are already clocked in today. Do you want to Clock out?")
-                    self.database[self.employee_name][date]['out'] = time
-                else:
-                    self.check_lable.setText("You are not clocked in. Do you want to Clock in?")
-                    self.database[self.employee_name][date]['in'] = time
-
+        if(text == "yes"):
+            if(len(self.database) == 0):
+                self.check_lable.setText("You are not clocked in. Do you want to Clock in?")
+                self.thread.sig1.connect(self.clock_in)
+                self.thread.restart()
             else:
-                self.check_lable.setText("Looks like you are already clocked in today. Do you want to Clock out?")
-                self.database[self.employee_name][date]['out'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if(self.employee_name in self.database.keys()):
+                    print(self.database[self.employee_name].keys())
+                    if(date in self.database[self.employee_name].keys()):
+                        if(self.database[self.employee_name][date]['break']['out'] != ''):
+                            self.check_lable.setText("Looks like you were on a break. Do you want to continue your shift?")
+                            self.thread.sig1.connect(self.clock_break_in)
+                            self.thread.restart()
+                        else:
+                            self.check_lable.setText("Looks like you are already clocked in today. Do you want to Clock out?")
+                            self.thread.sig1.connect(self.clock_out)
+                            self.thread.restart()
+                    else:
+                        self.database[self.employee_name] = {date : {"in": "", "out": "", "break": {"in": "", "out": ""}}}
+                        self.check_lable.setText("You are not clocked in. Do you want to Clock in?")
+                        self.thread.sig1.connect(self.clock_in)
+                        self.thread.restart()
+                else:
+                    self.database[self.employee_name] = {date: {"in": "", "out": "", "break": {"in": "", "out": ""}}}
+                    self.check_lable.setText("You are not clocked in. Do you want to Clock in?")
+                    self.thread.sig1.connect(self.clock_in)
+                    self.thread.restart()
 
-        with open("database.json", "w") as outfile:  # save the name and id in json file
-            json.dump(self.database, outfile)
+            with open("database.json", "w") as outfile:  # save the name and id in json file
+                json.dump(self.database, outfile)
 
         self.face_recognition_widget.name.connect(self.interact_with_text)
+
+    def clock_in(self, text):
+        date = datetime.datetime.now().strftime("%Y/%m/%d")
+        time = datetime.datetime.now().strftime("%H:%M:%S")
+        self.thread.stop()
+        self.thread.sig1.disconnect()
+        if("yes" in text):
+            # self.database[self.employee_name] = {str(date): {'in': str(time), 'out': 'Null', 'break': {"in": "", "out": ""}}}
+            self.database[self.employee_name][date]['in'] = time
+            # cv2.imwrite(date+'_'+time+'_'+self.employee_name, self.face_recognition_widget.image)
+        elif("no" in text):
+            self.check_lable.setText("Do you want to FORCE Clock Out?")
+            self.thread.sig1.connect(self.clock_out_execption)
+            self.thread.restart()
+        with open("database.json", "w") as outfile:  # save the name and id in json file
+            json.dump(self.database, outfile)
+        self.thread.restart()
+
+
+    def clock_out(self, text):
+        date = datetime.datetime.now().strftime("%Y/%m/%d")
+        time = datetime.datetime.now().strftime("%H:%M:%S")
+        self.thread.stop()
+        self.thread.sig1.disconnect()
+        if "yes" in text:
+            self.database[self.employee_name][date]['out'] = time
+            self.thread.sig1.connect(self.check_name)
+        elif "no" in text:
+            self.check_lable.setText("Do you want to go out on a break")
+            self.thread.sig1.connect(self.clock_break)
+        with open("database.json", "w") as outfile:  # save the name and id in json file
+            json.dump(self.database, outfile)
+        self.thread.restart()
+
+    def clock_out_execption(self, text):
+        date = datetime.datetime.now().strftime("%Y/%m/%d")
+        time = datetime.datetime.now().strftime("%H:%M:%S")
+        self.thread.stop()
+        self.thread.sig1.disconnect()
+        if text == "yes":
+            self.database[self.employee_name][date]['in'] = "EXCEPTION"
+            self.database[self.employee_name][date]['out'] = time
+            self.thread.sig1.connect(self.check_name)
+        if text == "no":
+            self.thread.sig1.connect(self.check_name)
+        with open("database.json", "w") as outfile:  # save the name and id in json file
+            json.dump(self.database, outfile)
+        self.thread.restart()
+
+    def clock_break(self, text):
+        date = datetime.datetime.now().strftime("%Y/%m/%d")
+        time = datetime.datetime.now().strftime("%H:%M:%S")
+        self.thread.sig1.disconnect()
+        self.thread.stop()
+        if text == "yes":
+            self.database[self.employee_name][date]['break'] = {'in' : ''  , 'out' : time}
+            with open("database.json", "w") as outfile:  # save the name and id in json file
+                json.dump(self.database, outfile)
+        self.thread.sig1.connect(self.check_name)
+        self.thread.restart()
+
+    def clock_break_in(self, text):
+        date = datetime.datetime.now().strftime("%Y/%m/%d")
+        time = datetime.datetime.now().strftime("%H:%M:%S")
+        self.thread.sig1.disconnect()
+        self.thread.stop()
+        if"yes" in text:
+            self.database[self.employee_name][date]['break'] = {'in': time, 'out': ''}
+            with open("database.json", "w") as outfile:  # save the name and id in json file
+                json.dump(self.database, outfile)
+        self.thread.sig1.connect(self.check_name)
+        self.thread.restart()
+
+    def in_out_confirm(self, text):
+        msgBox = QtWidgets.QMessageBox()
+        if('in' in text or ' out' in text):
+            msgBox.setText("You Have been Clocked " + text)
+        else:
+            msgBox.setText("You are on a break")
+        msgBox.setWindowTitle("Confiration box")
+        msgBox.setStandardButtons(QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
+        returnValue = msgBox.exec()
+        if returnValue == QtWidgets.QMessageBox.Ok ################################## ::::::::::
+            self.show()
 
     def check_registered(self, reg):
         self.loading_lable.setText(reg)
@@ -402,6 +502,7 @@ class MainWindow(QtWidgets.QWidget):
                 self.record_video.image_data.disconnect()
                 self.record_video.image_data.connect(self.face_recognition_widget.recognize_face)
                 self.record_video.start_recording()
+                self.face_recognition_widget.recognizer.read('trainer/trainer.yml')
             elif returnValue == QtWidgets.QMessageBox.Cancel:
                 self.name_of_user.setEnabled(True)
 
@@ -413,6 +514,7 @@ class MainWindow(QtWidgets.QWidget):
           self.stacked1.setCurrentIndex(1)
           self.stacked2.setCurrentIndex(1)
           self.stacked3.setCurrentIndex(1)
+          self.name_of_user.setEnabled(True)
           self.record_video.timer.stop()
           self.record_video.image_data.disconnect()
           self.record_video.image_data.connect(self.face_recognition_widget.image_data_slot)

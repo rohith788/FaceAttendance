@@ -80,7 +80,7 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         # if(self.face_id in self.name_to_id): self.face_name.emit("User Already exists. Please enter a different Name")
         faces = self.detect_faces(image_data)
         gray = cv2.cvtColor(image_data, cv2.COLOR_BGR2GRAY)
-        if(self.count < 70):
+        if(self.count < 200):
             for (x, y, w, h) in faces:
                 if(self.c == 7): self.c = 1
                 txt = "Registering"
@@ -104,7 +104,7 @@ class FaceDetectionWidget(QtWidgets.QWidget):
                             str(self.count) + ".jpg", gray[y:y + h, x:x + w])
                 #################################################################
 
-        if (self.count == 70):
+        if (self.count == 200):
             self.train_classifier()
             self.count += 1
             with open("face_id.json", "w") as outfile:
