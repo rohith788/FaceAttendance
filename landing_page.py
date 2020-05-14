@@ -32,12 +32,12 @@ class Speech(QtCore.QThread):
                 recogniser.adjust_for_ambient_noise(source)
 
                 try:
-                    self.sig2.emit("Pleas Speak")
+                    self.sig2.emit("Please Speak")
                     audio = recogniser.listen(source, timeout=3)
 
                     print("done")
                 except:
-                    self.sig2.emit("Pleas Wait")
+                    self.sig2.emit("Please Wait")
                     print("timeout")
                 try:
                     text = recogniser.recognize_google(audio)
@@ -289,6 +289,12 @@ class MainWindow(QtWidgets.QWidget):
         self.check_lable = QtWidgets.QLabel() #first lable ro display name
         self.disp_speech = QtWidgets.QLabel()# label class to show options
         self.loading_lable  = QtWidgets.QLabel() #show registering loading
+        self.check_lable.setAlignment(QtCore.Qt.AlignCenter)
+        self.disp_speech.setAlignment(QtCore.Qt.AlignCenter)
+        self.loading_lable.setAlignment(QtCore.Qt.AlignCenter)
+        self.check_lable.setFont(QtGui.QFont('Arial', 15))
+        self.disp_speech.setFont(QtGui.QFont('Arial', 15))
+        self.loading_lable.setFont(QtGui.QFont('Arial', 15))
         self.loading_lable.setText("Enter Name of the Employee")
         self.name_of_user = QtWidgets.QLineEdit() #text box widget for taking name
 
@@ -375,7 +381,6 @@ class MainWindow(QtWidgets.QWidget):
                 self.thread.restart()
             else:
                 if(self.employee_name in self.database.keys()):
-                    print(self.database[self.employee_name].keys())
                     if(date in self.database[self.employee_name].keys()):
                         if(self.database[self.employee_name][date]['break']['out'] != ''):
                             self.check_lable.setText("Looks like you were on a break. Do you want to continue your shift?")
@@ -409,7 +414,7 @@ class MainWindow(QtWidgets.QWidget):
         if("yes" in text):
             # self.database[self.employee_name] = {str(date): {'in': str(time), 'out': 'Null', 'break': {"in": "", "out": ""}}}
             self.database[self.employee_name][date]['in'] = time
-            self.in_out_confirm(text)
+            self.in_out_confirm('in')
             # cv2.imwrite(date+'_'+time+'_'+self.employee_name, self.face_recognition_widget.image)
         elif("no" in text):
             self.check_lable.setText("Do you want to FORCE Clock Out?")
@@ -423,11 +428,12 @@ class MainWindow(QtWidgets.QWidget):
     def clock_out(self, text):
         date = datetime.datetime.now().strftime("%Y/%m/%d")
         time = datetime.datetime.now().strftime("%H:%M:%S")
+        print('out')
         self.thread.stop()
         self.thread.sig1.disconnect()
         if "yes" in text:
             self.database[self.employee_name][date]['out'] = time
-            self.in_out_confirm(text)
+            self.in_out_confirm('out')
             self.thread.sig1.connect(self.check_name)
         elif "no" in text:
             self.check_lable.setText("Do you want to go out on a break")
@@ -445,7 +451,7 @@ class MainWindow(QtWidgets.QWidget):
         if text == "yes":
             self.database[self.employee_name][date]['in'] = "EXCEPTION"
             self.database[self.employee_name][date]['out'] = time
-            self.in_out_confirm(text)
+            self.in_out_confirm('out')
             self.thread.sig1.connect(self.check_name)
         if text == "no":
             self.thread.sig1.connect(self.check_name)
@@ -463,7 +469,7 @@ class MainWindow(QtWidgets.QWidget):
 
             with open("database.json", "w") as outfile:  # save the name and id in json file
                 json.dump(self.database, outfile)
-            self.in_out_confirm(text)
+            self.in_out_confirm('break')
         self.thread.sig1.connect(self.check_name)
         self.thread.restart()
 
@@ -481,11 +487,13 @@ class MainWindow(QtWidgets.QWidget):
 
     def in_out_confirm(self, text):
         msgBox = QtWidgets.QMessageBox()
-        if('in' in text or ' out' in text):
+        print('-----' , text,  '-----')
+        if('in' in text or 'out' in text):
             msgBox.setText("You Have been Clocked " + text)
         else:
             msgBox.setText("You are on a break")
         msgBox.setWindowTitle("Confiration box")
+        self.face_recognition_widget.name.connect(self.interact_with_text)
         msgBox.setStandardButtons(QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
         returnValue = msgBox.exec()
         if returnValue == QtWidgets.QMessageBox.Ok:
